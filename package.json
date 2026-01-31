@@ -1,0 +1,338 @@
+{
+  "name": "ultimate-git-intellij",
+  "publisher": "simonesartor", 
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/simonesartor/git-plugin"
+  },
+  "displayName": "Ultimate Git (IntelliJ Style)",
+  "description": "A powerful Git extension for VS Code inspired by IntelliJ IDEA.",
+  "version": "0.0.2",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Visualization"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "git-intellij-explorer",
+          "title": "Git Ultimate",
+          "icon": "resources/icon.svg"
+        }
+      ],
+      "panel": [
+        {
+          "id": "git-intellij-panel",
+          "title": "Git History",
+          "icon": "$(history)"
+        }
+      ]
+    },
+    "views": {
+      "git-intellij-explorer": [
+        {
+          "id": "git-intellij.repositories",
+          "name": "Repositories",
+          "type": "tree",
+          "icon": "$(source-control)"
+        },
+        {
+          "id": "git-intellij.history",
+          "name": "Local History",
+          "type": "tree",
+          "icon": "$(history)"
+        },
+        {
+          "id": "git-intellij.unifiedBranches",
+          "name": "Unified Branches",
+          "type": "tree",
+          "icon": "$(git-branch)",
+          "canSelectMany": true
+        }
+      ],
+      "git-intellij-panel": [
+        {
+          "type": "webview",
+          "id": "git-intellij.historyView",
+          "name": "Selection History"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "git-intellij.refresh",
+        "title": "Git Ultimate: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "git-intellij.openAdvancedLog",
+        "title": "Git Ultimate: Open Advanced Log",
+        "category": "Git Ultimate"
+      },
+      {
+        "command": "git-intellij.openInTerminal",
+        "title": "Open in Terminal",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "git-intellij.copyPath",
+        "title": "Copy Path",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "git-intellij.multiCheckout",
+        "title": "Git Ultimate: Multi-Checkout Branches (All)",
+        "category": "Git Ultimate",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "git-intellij.selectiveMultiCheckout",
+        "title": "Git Ultimate: Selective Multi-Checkout...",
+        "category": "Git Ultimate",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "git-intellij.showHistoryForSelection",
+        "title": "Git Ultimate: Show History for Selection",
+        "category": "Git Ultimate"
+      },
+      {
+        "command": "git-intellij.history.prev",
+        "title": "Previous Revision",
+        "category": "Git Ultimate"
+      },
+      {
+        "command": "git-intellij.history.next",
+        "title": "Next Revision",
+        "category": "Git Ultimate"
+      },
+      {
+        "command": "git-intellij.compareWithBranch",
+        "title": "Git Ultimate: Compare with Branch...",
+        "category": "Git Ultimate"
+      },
+      {
+        "command": "git-intellij.compareWithRevision",
+        "title": "Git Ultimate: Compare with Revision...",
+        "category": "Git Ultimate"
+      },
+      {
+        "command": "git-intellij.unified.toggleStar",
+        "title": "Star/Unstar Branch",
+        "icon": "$(star)"
+      },
+      {
+        "command": "git-intellij.unified.checkout",
+        "title": "Checkout",
+        "icon": "$(check)"
+      },
+      {
+        "command": "git-intellij.unified.fetch",
+        "title": "Fetch",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "git-intellij.unified.pull",
+        "title": "Pull",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "git-intellij.unified.push",
+        "title": "Push",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "git-intellij.unified.copyName",
+        "title": "Copy Branch Name",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "git-intellij.unified.merge",
+        "title": "Merge into Current...",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "git-intellij.unified.rebase",
+        "title": "Rebase Current onto...",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "git-intellij.unified.createBranch",
+        "title": "New Branch from Selected...",
+        "icon": "$(plus)"
+      },
+      {
+        "command": "git-intellij.unified.fetchFiltered",
+        "title": "Fetch All (Filtered)",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "git-intellij.unified.filter",
+        "title": "Filter Repositories...",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "git-intellij.unified.deleteBranch",
+        "title": "Delete Branch",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "git-intellij.unified.search",
+        "title": "Search Branches...",
+        "icon": "$(search)"
+      },
+      {
+        "command": "git-intellij.unified.clearSearch",
+        "title": "Clear Search",
+        "icon": "$(close)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "git-intellij.history.prev",
+        "key": "up",
+        "when": "resourceScheme == git-intellij-revision && editorTextFocus"
+      },
+      {
+        "command": "git-intellij.history.next",
+        "key": "down",
+        "when": "resourceScheme == git-intellij-revision && editorTextFocus"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "git-intellij.compareWithBranch",
+          "group": "7_modification@1"
+        },
+        {
+          "command": "git-intellij.compareWithRevision",
+          "group": "7_modification@2"
+        },
+        {
+          "command": "git-intellij.showHistoryForSelection",
+          "when": "editorHasSelection",
+          "group": "7_modification@3"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "git-intellij.selectiveMultiCheckout",
+          "when": "view == git-intellij.repositories",
+          "group": "navigation@1"
+        },
+        {
+          "command": "git-intellij.multiCheckout",
+          "when": "view == git-intellij.repositories",
+          "group": "navigation@2"
+        },
+        {
+          "command": "git-intellij.refresh",
+          "when": "view == git-intellij.repositories || view == git-intellij.unifiedBranches",
+          "group": "navigation@3"
+        },
+        {
+          "command": "git-intellij.unified.fetchFiltered",
+          "when": "view == git-intellij.unifiedBranches",
+          "group": "navigation@0"
+        },
+        {
+          "command": "git-intellij.unified.filter",
+          "when": "view == git-intellij.unifiedBranches",
+          "group": "navigation@1"
+        },
+        {
+          "command": "git-intellij.unified.search",
+          "when": "view == git-intellij.unifiedBranches",
+          "group": "navigation@2"
+        },
+        {
+          "command": "git-intellij.unified.clearSearch",
+          "when": "view == git-intellij.unifiedBranches",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "git-intellij.openInTerminal",
+          "when": "view == git-intellij.repositories && viewItem == repository",
+          "group": "inline"
+        },
+        {
+          "command": "git-intellij.copyPath",
+          "when": "view == git-intellij.repositories && viewItem == repository",
+          "group": "1_modification"
+        },
+        {
+          "command": "git-intellij.unified.toggleStar",
+          "when": "view == git-intellij.unifiedBranches && viewItem == unifiedBranch",
+          "group": "inline@1"
+        },
+        {
+          "command": "git-intellij.unified.checkout",
+          "when": "view == git-intellij.unifiedBranches && viewItem == unifiedBranch",
+          "group": "inline@2"
+        },
+        {
+          "command": "git-intellij.unified.fetch",
+          "when": "view == git-intellij.unifiedBranches && viewItem == unifiedBranch",
+          "group": "1_git"
+        },
+        {
+          "command": "git-intellij.unified.pull",
+          "when": "view == git-intellij.unifiedBranches && viewItem == unifiedBranch",
+          "group": "1_git"
+        },
+        {
+          "command": "git-intellij.unified.push",
+          "when": "view == git-intellij.unifiedBranches && viewItem == unifiedBranch",
+          "group": "1_git"
+        },
+        {
+          "command": "git-intellij.unified.copyName",
+          "when": "view == git-intellij.unifiedBranches && viewItem == unifiedBranch",
+          "group": "3_git"
+        },
+        {
+          "command": "git-intellij.unified.merge",
+          "when": "view == git-intellij.unifiedBranches && viewItem == unifiedBranch",
+          "group": "2_git"
+        },
+        {
+          "command": "git-intellij.unified.rebase",
+          "when": "view == git-intellij.unifiedBranches && viewItem == unifiedBranch",
+          "group": "2_git"
+        },
+        {
+          "command": "git-intellij.unified.createBranch",
+          "when": "view == git-intellij.unifiedBranches && viewItem == unifiedBranch",
+          "group": "3_git"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "18.x",
+    "@typescript-eslint/eslint-plugin": "^6.13.1",
+    "@typescript-eslint/parser": "^6.13.1",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.2"
+  }
+}

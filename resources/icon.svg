@@ -1,0 +1,14 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Lightning Bolt -->
+  <path d="M50 20L84 0L74 48H108L44 128L54 70H20L50 20Z" fill="#F05032" stroke="white" stroke-width="4" stroke-linejoin="round"/>
+  
+  <!-- Git Nodes Overlay -->
+  <!-- Bottom Node -->
+  <circle cx="58" cy="100" r="10" fill="white" stroke="#F05032" stroke-width="4"/>
+  
+  <!-- Top Node (start of bolt) -->
+  <circle cx="64" cy="24" r="10" fill="white" stroke="#F05032" stroke-width="4"/>
+  
+  <!-- Side Node (on the jagged part) -->
+  <circle cx="96" cy="60" r="10" fill="white" stroke="#F05032" stroke-width="4"/>
+</svg>
