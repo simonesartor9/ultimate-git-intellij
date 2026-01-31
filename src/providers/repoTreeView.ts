@@ -4,9 +4,9 @@ import { RepositoryManager } from '../core/repoManager';
 /**
  * Provides data for the "Repositories" tree view in the Side Bar.
  */
-export class RepoTreeViewProvider implements vscode.TreeDataProvider<RepoItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<RepoItem | undefined | void> = new vscode.EventEmitter<RepoItem | undefined | void>();
-    readonly onDidChangeTreeData: vscode.Event<RepoItem | undefined | void> = this._onDidChangeTreeData.event;
+export class RepoTreeViewProvider implements vscode.TreeDataProvider<RepoItem | FileChangeItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<RepoItem | FileChangeItem | undefined | void> = new vscode.EventEmitter<RepoItem | FileChangeItem | undefined | void>();
+    readonly onDidChangeTreeData: vscode.Event<RepoItem | FileChangeItem | undefined | void> = this._onDidChangeTreeData.event;
 
     constructor(private repoManager: RepositoryManager) {
         // Refresh view when repos are updated (added/removed)
@@ -20,13 +20,21 @@ export class RepoTreeViewProvider implements vscode.TreeDataProvider<RepoItem> {
         this._onDidChangeTreeData.fire();
     }
 
-    getTreeItem(element: RepoItem): vscode.TreeItem {
+    getTreeItem(element: RepoItem | FileChangeItem): vscode.TreeItem {
         return element;
     }
 
-    getChildren(element?: RepoItem): Thenable<RepoItem[]> {
-        if (element) {
-            return Promise.resolve([]); // No nested items yet
+    getChildren(element?: RepoItem | FileChangeItem): Thenable<(RepoItem | FileChangeItem)[]> {
+        if (element instanceof RepoItem) {
+            // If repo has changes, show them as children
+            if (element.state.localChanges && element.state.localChanges.length > 0) {
+                return Promise.resolve(
+                    element.state.localChanges.map((file: string) => new FileChangeItem(file, element.state.rootPath))
+                );
+            }
+            return Promise.resolve([]);
+        } else if (element instanceof FileChangeItem) {
+            return Promise.resolve([]);
         } else {
             // Root level: show list of repositories
             return Promise.resolve(
@@ -40,10 +48,13 @@ class RepoItem extends vscode.TreeItem {
     constructor(public readonly state: any) {
         const path = state.rootPath;
         const label = path.split(/[\\/]/).pop() || path;
-        super(label, vscode.TreeItemCollapsibleState.None);
+        const hasChanges = state.localChanges && state.localChanges.length > 0;
         
-        this.tooltip = `Path: ${path}\nBranch: ${state.branch}\nStatus: ${state.isDirty ? 'Dirty' : 'Clean'}`;
-        this.description = `${state.branch}${state.isDirty ? '*' : ''}`;
+        // Collapsible if has changes
+        super(label, hasChanges ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
+        
+        this.tooltip = `Path: ${path}\nBranch: ${state.branch}\nChanges: ${state.localChanges?.length || 0}`;
+        this.description = `${state.branch} ${hasChanges ? `(${state.localChanges.length})` : ''}`;
         
         // Dynamic icons based on status
         this.iconPath = state.isDirty 
@@ -52,12 +63,27 @@ class RepoItem extends vscode.TreeItem {
 
         // Context value for menu targeting
         this.contextValue = 'repository';
+    }
+}
 
-        // Default command when clicking the item
+export class FileChangeItem extends vscode.TreeItem {
+    constructor(public readonly fileName: string, public readonly rootPath: string) {
+        super(fileName, vscode.TreeItemCollapsibleState.None);
+        
+        this.description = 'Modified';
+        this.tooltip = fileName;
+        this.contextValue = 'fileChange';
+        this.resourceUri = vscode.Uri.file(`${rootPath}/${fileName}`); // Use proper URI for file icon
+        
+        // Command to diff file on click
         this.command = {
-            command: 'git-intellij.repo.checkout',
-            title: 'Checkout...',
-            arguments: [state]
+            command: 'vscode.diff',
+            title: 'Open Diff',
+            arguments: [
+                vscode.Uri.parse(`git-intellij-revision:${fileName}?revision=HEAD&rootPath=${rootPath}`),
+                vscode.Uri.file(`${rootPath}/${fileName}`),
+                `${fileName} (HEAD ↔ Local)`
+            ]
         };
     }
 }

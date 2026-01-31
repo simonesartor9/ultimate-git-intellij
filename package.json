@@ -62,7 +62,8 @@
         {
           "type": "webview",
           "id": "git-intellij.historyView",
-          "name": "Selection History"
+          "name": "Selection History",
+          "icon": "$(history)"
         }
       ]
     },
@@ -193,6 +194,26 @@
         "command": "git-intellij.unified.clearSearch",
         "title": "Clear Search",
         "icon": "$(close)"
+      },
+      {
+        "command": "git-intellij.repo.discardAll",
+        "title": "Discard All Changes",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "git-intellij.repo.discardFile",
+        "title": "Discard Changes",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "git-intellij.multiRepo.discardAll",
+        "title": "Discard All Changes (Selected)",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "git-intellij.multiRepo.updateProject",
+        "title": "Update Project (Selected)",
+        "icon": "$(sync)"
       }
     ],
     "keybindings": [
@@ -224,6 +245,16 @@
         }
       ],
       "view/title": [
+        {
+          "command": "git-intellij.multiRepo.updateProject",
+          "when": "view == git-intellij.repositories",
+          "group": "navigation@0"
+        },
+        {
+          "command": "git-intellij.multiRepo.discardAll",
+          "when": "view == git-intellij.repositories",
+          "group": "navigation@0"
+        },
         {
           "command": "git-intellij.selectiveMultiCheckout",
           "when": "view == git-intellij.repositories",
@@ -315,6 +346,26 @@
           "command": "git-intellij.unified.createBranch",
           "when": "view == git-intellij.unifiedBranches && viewItem == unifiedBranch",
           "group": "3_git"
+        },
+        {
+          "command": "git-intellij.unified.deleteBranch",
+          "when": "view == git-intellij.unifiedBranches && viewItem == unifiedBranch",
+          "group": "3_git"
+        },
+        {
+            "command": "git-intellij.repo.discardAll",
+            "when": "view == git-intellij.repositories && viewItem == repository",
+            "group": "1_modification"
+        },
+        {
+            "command": "git-intellij.repo.discardFile",
+            "when": "view == git-intellij.repositories && viewItem == fileChange",
+            "group": "inline"
+        },
+        {
+            "command": "git-intellij.repo.discardFile",
+            "when": "view == git-intellij.repositories && viewItem == fileChange",
+            "group": "1_modification"
         }
       ]
     }

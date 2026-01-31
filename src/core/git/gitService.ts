@@ -313,4 +313,32 @@ export class GitService {
         const output = await this.exec(['status', '--porcelain'], { cwd });
         return output.trim().length > 0;
     }
+
+    /**
+     * Discards all local changes in the repository (reset --hard and clean -fd).
+     */
+    public async discardAllChanges(cwd: string): Promise<void> {
+        await this.exec(['reset', '--hard', 'HEAD'], { cwd });
+        await this.exec(['clean', '-fd'], { cwd });
+    }
+
+    /**
+     * Discards changes for a specific file.
+     */
+    public async discardFileChanges(cwd: string, filePath: string): Promise<void> {
+        const relativePath = filePath.replace(cwd + '/', '').replace(cwd + '\\', '');
+        // Discard tracked changes
+        try {
+            await this.exec(['checkout', 'HEAD', '--', relativePath], { cwd });
+        } catch (e) {
+            // Might fail if file is untracked, that's expected
+        }
+        
+        // Also try to clean if it was untracked/new
+        try {
+            await this.exec(['clean', '-f', relativePath], { cwd });
+        } catch (e) {
+            // Ignore if clean fails
+        }
+    }
 }

@@ -7,9 +7,9 @@ export interface RepositoryState {
     rootPath: string;
     branch: string;
     isDirty: boolean;
+    localChanges: string[]; // List of file paths
     lastUpdate: number;
 }
-
 /**
  * Advanced manager for Git repositories.
  * Tracks multiple repos, monitors changes, and emits events.
@@ -139,14 +139,15 @@ export class RepositoryManager implements Disposable {
             this._onDidChangeRepoState.fire(newState);
         }
     }
-
     private async fetchRepositoryState(path: string): Promise<RepositoryState> {
         try {
             const status = await this._gitService.getStatus(path);
+            const allChanges = [...status.modified, ...status.untracked, ...status.staged];
             return {
                 rootPath: path,
                 branch: status.branch,
-                isDirty: status.modified.length > 0 || status.untracked.length > 0 || status.staged.length > 0,
+                isDirty: allChanges.length > 0,
+                localChanges: allChanges,
                 lastUpdate: Date.now()
             };
         } catch (e) {
@@ -154,6 +155,7 @@ export class RepositoryManager implements Disposable {
                 rootPath: path,
                 branch: 'unknown',
                 isDirty: false,
+                localChanges: [],
                 lastUpdate: Date.now()
             };
         }

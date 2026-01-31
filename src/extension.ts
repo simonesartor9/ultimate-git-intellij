@@ -71,12 +71,52 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    const discardAllRepoChangesCmd = vscode.commands.registerCommand('git-intellij.repo.discardAll', async (item: any) => {
+        const state = item.state || item;
+        const choice = await vscode.window.showWarningMessage(
+            `Discard ALL changes in ${state.rootPath.split(/[\\/]/).pop()}? This cannot be undone.`,
+            { modal: true },
+            'Discard All'
+        );
+        if (choice === 'Discard All') {
+            try {
+                await gitService.discardAllChanges(state.rootPath);
+            } catch (e: any) {
+                vscode.window.showErrorMessage(`Failed to discard changes: ${e.message}`);
+            }
+        }
+    });
+
+    const discardFileChangesCmd = vscode.commands.registerCommand('git-intellij.repo.discardFile', async (item: any) => {
+        const filePath = `${item.rootPath}/${item.fileName}`;
+         const choice = await vscode.window.showWarningMessage(
+            `Discard changes in ${item.fileName}?`,
+            { modal: true },
+            'Discard File'
+        );
+        if (choice === 'Discard File') {
+            try {
+                await gitService.discardFileChanges(item.rootPath, filePath);
+            } catch (e: any) {
+                vscode.window.showErrorMessage(`Failed to discard file: ${e.message}`);
+            }
+        }
+    });
+
     const multiCheckoutCmd = vscode.commands.registerCommand('git-intellij.multiCheckout', () => {
         multiRepoService.performMultiCheckout();
     });
 
     const selectiveMultiCheckoutCmd = vscode.commands.registerCommand('git-intellij.selectiveMultiCheckout', () => {
         multiRepoService.performSelectiveMultiCheckout();
+    });
+
+    const multiDiscardAllCmd = vscode.commands.registerCommand('git-intellij.multiRepo.discardAll', () => {
+        multiRepoService.performMultiDiscard();
+    });
+
+    const multiUpdateProjectCmd = vscode.commands.registerCommand('git-intellij.multiRepo.updateProject', () => {
+        multiRepoService.performMultiPull();
     });
 
     // Unified Branch Commands
@@ -297,9 +337,13 @@ export function activate(context: vscode.ExtensionContext) {
         refreshCmd,
         openTerminalCmd,
         repoCheckoutCmd,
+        discardAllRepoChangesCmd,
+        discardFileChangesCmd,
         unifiedToggleStarCmd,
         multiCheckoutCmd,
         selectiveMultiCheckoutCmd,
+        multiDiscardAllCmd,
+        multiUpdateProjectCmd,
         historyForSelectionCmd,
         historyPrevCmd,
         historyNextCmd,

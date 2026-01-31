@@ -50,37 +50,18 @@ export class MultiRepoService {
      * Executes a coordinated checkout across SELECTED repositories.
      */
     public async performSelectiveMultiCheckout() {
-        const repos = this.repoManager.repositories;
-        if (repos.length === 0) {
-            vscode.window.showWarningMessage('No active Git repositories found.');
-            return;
-        }
-
-        const repoItems: (vscode.QuickPickItem & { repo: any })[] = repos.map(r => ({
-            label: r.rootPath.split(/[\\/]/).pop() || 'Unknown',
-            description: `[${r.branch}]`,
-            detail: r.rootPath,
-            picked: true,
-            repo: r
-        }));
-
-        const selectedRepos = await vscode.window.showQuickPick(repoItems, {
-            placeHolder: 'Select repositories for checkout',
-            canPickMany: true
-        });
-
+        const selectedRepos = await this.selectRepositories('Select repositories for checkout');
         if (!selectedRepos || selectedRepos.length === 0) return;
 
-        const targetRepos = selectedRepos.map(item => item.repo);
-        const allBranches = await this.getAllBranches(targetRepos);
+        const allBranches = await this.getAllBranches(selectedRepos);
 
         const selectedBranch = await vscode.window.showQuickPick(Array.from(allBranches), {
-            placeHolder: `Select target branch for ${targetRepos.length} repositories`
+            placeHolder: `Select target branch for ${selectedRepos.length} repositories`
         });
 
         if (!selectedBranch) return;
 
-        await this.executeBatchOperation(targetRepos, `Checking out '${selectedBranch}'...`, async (repo) => {
+        await this.executeBatchOperation(selectedRepos, `Checking out '${selectedBranch}'...`, async (repo) => {
             const branches = await this.gitService.getBranches(repo.rootPath);
             
             // Try exact match
@@ -95,6 +76,53 @@ export class MultiRepoService {
                 await this.smartCheckout(repo, remoteMatch.name);
             }
         });
+    }
+
+    public async performMultiDiscard() {
+        const selectedRepos = await this.selectRepositories('Select repositories to DISCARD changes');
+        if (!selectedRepos || selectedRepos.length === 0) return;
+
+        const confirm = await vscode.window.showWarningMessage(
+            `Are you sure you want to DISCARD ALL changes in ${selectedRepos.length} repositories? This cannot be undone.`,
+            { modal: true },
+            'Discard All'
+        );
+
+        if (confirm === 'Discard All') {
+            await this.executeBatchOperation(selectedRepos, 'Discarding all changes...', async (repo) => {
+                await this.gitService.discardAllChanges(repo.rootPath);
+            });
+        }
+    }
+
+    public async performMultiPull() {
+        const selectedRepos = await this.selectRepositories('Select repositories to Update (Pull)');
+        if (!selectedRepos || selectedRepos.length === 0) return;
+
+        await this.performPull(selectedRepos);
+    }
+
+    private async selectRepositories(placeholder: string): Promise<any[] | undefined> {
+        const repos = this.repoManager.repositories;
+        if (repos.length === 0) {
+            vscode.window.showWarningMessage('No active Git repositories found.');
+            return undefined;
+        }
+
+        const repoItems: (vscode.QuickPickItem & { repo: any })[] = repos.map(r => ({
+            label: r.rootPath.split(/[\\/]/).pop() || 'Unknown',
+            description: `[${r.branch}]`,
+            detail: r.rootPath,
+            picked: true,
+            repo: r
+        }));
+
+        const selected = await vscode.window.showQuickPick(repoItems, {
+            placeHolder: placeholder,
+            canPickMany: true
+        });
+
+        return selected ? selected.map(item => item.repo) : undefined;
     }
 
     public async performFetch(repos: any[]) {
