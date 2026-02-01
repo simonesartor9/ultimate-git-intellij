@@ -130,7 +130,7 @@ export class MultiRepoService {
     }
 
     public async performPull(repos: any[]) {
-        await this.executeBatchOperation(repos, 'Pulling...', repo => this.gitService.pull(repo.rootPath));
+        await this.executeBatchOperation(repos, 'Pulling...', repo => this.gitService.pull(repo.rootPath), true);
     }
 
     public async performPush(repos: any[]) {
@@ -317,7 +317,7 @@ export class MultiRepoService {
     /**
      * Internal execution logic for batch operations.
      */
-    private async executeBatchOperation(repos: any[], title: string, operation: (repo: any) => Promise<void>) {
+    private async executeBatchOperation(repos: any[], title: string, operation: (repo: any) => Promise<void>, parallel: boolean = false) {
         await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
             title: title,
@@ -326,15 +326,30 @@ export class MultiRepoService {
             let completed = 0;
             const errors: string[] = [];
 
-            for (const repo of repos) {
-                try {
-                    await operation(repo);
-                } catch (e: any) {
-                    const name = repo.rootPath.split(/[\\/]/).pop();
-                    errors.push(`${name}: ${e.stderr || e.message}`);
+            if (parallel) {
+                const promises = repos.map(async (repo) => {
+                    try {
+                        await operation(repo);
+                    } catch (e: any) {
+                        const name = repo.rootPath.split(/[\\/]/).pop();
+                        errors.push(`${name}: ${e.stderr || e.message}`);
+                    } finally {
+                        completed++;
+                        progress.report({ increment: (100 / repos.length), message: `${completed}/${repos.length}` });
+                    }
+                });
+                await Promise.all(promises);
+            } else {
+                for (const repo of repos) {
+                    try {
+                        await operation(repo);
+                    } catch (e: any) {
+                        const name = repo.rootPath.split(/[\\/]/).pop();
+                        errors.push(`${name}: ${e.stderr || e.message}`);
+                    }
+                    completed++;
+                    progress.report({ increment: (100 / repos.length), message: `${completed}/${repos.length}` });
                 }
-                completed++;
-                progress.report({ increment: (100 / repos.length), message: `${completed}/${repos.length}` });
             }
 
             if (errors.length > 0) {

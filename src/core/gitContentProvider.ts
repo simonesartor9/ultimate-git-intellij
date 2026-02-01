@@ -22,6 +22,14 @@ export class GitContentProvider implements vscode.TextDocumentContentProvider {
 
         // Use originalPath if provided (for custom display names), otherwise fallback to uri.path
         const filePath = originalPath || uri.path;
-        return this.gitService.getFileContent(rootPath, filePath, revision);
+        try {
+            return await this.gitService.getFileContent(rootPath, filePath, revision);
+        } catch (e: any) {
+            // Handle case where file doesn't exist in that revision (e.g. file creation)
+            if (e.stderr && (e.stderr.includes('exists on disk, but not in') || e.stderr.includes('does not exist in'))) {
+                return '';
+            }
+            throw e;
+        }
     }
 }

@@ -103,6 +103,9 @@ export class HistoryViewProvider implements vscode.WebviewViewProvider {
     private async _openRevision(hash: string) {
         if (!this._repoPath || !this._filePath) return;
         
+        const commit = this._currentCommits.find(c => c.hash === hash);
+        if (!commit) return;
+
         try {
             // 1. Close previous revision if exists
             if (this._currentRevisionUri) {
@@ -110,56 +113,89 @@ export class HistoryViewProvider implements vscode.WebviewViewProvider {
                 // Iterate over all tab groups to find and close the tab
                 for (const group of vscode.window.tabGroups.all) {
                     for (const tab of group.tabs) {
-                        // Check if the tab matches our URI
-                        const input = tab.input as { uri?: vscode.Uri };
+                        const input = tab.input as any;
+                        // Handle standard text tabs
                         if (input && input.uri && input.uri.toString() === targetUriStr) {
                             await vscode.window.tabGroups.close(tab);
                             break; 
+                        }
+                        // Handle diff tabs (close if modified side matches)
+                        if (input && input.modified && input.modified.toString() === targetUriStr) {
+                            await vscode.window.tabGroups.close(tab);
+                            break;
                         }
                     }
                 }
             }
 
             this._currentHash = hash;
+            const parentHash = commit.parentHashes.length > 0 ? commit.parentHashes[0] : null;
 
-            // 2. Construct URI with custom display name
-            // Goal: /path/to/file.ts -> /path/to/file (Revision 1a2b3c).ts
             const ext = path.extname(this._filePath);
             const base = path.basename(this._filePath, ext);
             const dir = path.dirname(this._filePath);
             const shortHash = hash.substring(0, 7);
-            
-            // New "virtual" path for display
-            const displayPath = path.join(dir, `${base} (Revision ${shortHash})${ext}`);
 
-            const uri = vscode.Uri.parse(
-                `${GitContentProvider.scheme}:${displayPath}?revision=${hash}&rootPath=${this._repoPath}&originalPath=${this._filePath}`
-            );
-            
-            this._currentRevisionUri = uri; // Track it
+            if (parentHash) {
+                // SHOW DIFF VIEW (IntelliJ Style)
+                const shortParent = parentHash.substring(0, 7);
+                
+                const leftPath = path.join(dir, `${base} (${shortParent})${ext}`);
+                const rightPath = path.join(dir, `${base} (${shortHash})${ext}`);
 
-            const doc = await vscode.workspace.openTextDocument(uri);
-            const editor = await vscode.window.showTextDocument(doc, {
-                preview: true,
-                preserveFocus: true,
-                viewColumn: vscode.ViewColumn.Active
-            });
+                const leftUri = vscode.Uri.parse(
+                    `${GitContentProvider.scheme}:${leftPath}?revision=${parentHash}&rootPath=${this._repoPath}&originalPath=${this._filePath}`
+                );
+                const rightUri = vscode.Uri.parse(
+                    `${GitContentProvider.scheme}:${rightPath}?revision=${hash}&rootPath=${this._repoPath}&originalPath=${this._filePath}`
+                );
 
-            if (this._startLine && this._endLine) {
-                const range = new vscode.Range(
-                    Math.max(0, this._startLine - 1), 
-                    0, 
-                    Math.max(0, this._endLine - 1), 
-                    1000
+                this._currentRevisionUri = rightUri; // Track the "main" (right) URI for closing later
+
+                const title = `${base} (${shortParent} ↔ ${shortHash})`;
+
+                await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, title, {
+                    preview: true,
+                    preserveFocus: true,
+                    viewColumn: vscode.ViewColumn.Active
+                });
+                
+                // Note: We don't manually highlight the line range in Diff view 
+                // as the Diff view's purpose is to show changes on its own.
+                
+            } else {
+                // Fallback for Root Commit (Single View)
+                const displayPath = path.join(dir, `${base} (Revision ${shortHash})${ext}`);
+                const uri = vscode.Uri.parse(
+                    `${GitContentProvider.scheme}:${displayPath}?revision=${hash}&rootPath=${this._repoPath}&originalPath=${this._filePath}`
                 );
                 
-                editor.setDecorations(vscode.window.createTextEditorDecorationType({
-                    backgroundColor: new vscode.ThemeColor('editor.findMatchHighlightBackground'),
-                    isWholeLine: true
-                }), [range]);
-                
-                editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+                this._currentRevisionUri = uri;
+
+                const doc = await vscode.workspace.openTextDocument(uri);
+                const editor = await vscode.window.showTextDocument(doc, {
+                    preview: true,
+                    preserveFocus: true,
+                    viewColumn: vscode.ViewColumn.Active
+                });
+
+                if (this._startLine && this._endLine) {
+                    const range = new vscode.Range(
+                        Math.max(0, this._startLine - 1), 
+                        0, 
+                        Math.max(0, this._endLine - 1), 
+                        1000
+                    );
+                    
+                    editor.setDecorations(vscode.window.createTextEditorDecorationType({
+                        backgroundColor: new vscode.ThemeColor('editor.findMatchHighlightBackground'),
+                        isWholeLine: true
+                    }), [range]);
+                    
+                    editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+                }
             }
+
         } catch (error) {
             vscode.window.showErrorMessage(`Error opening revision: ${error}`);
         }
