@@ -16,8 +16,9 @@ export interface RepositoryState {
  */
 export class RepositoryManager implements Disposable {
     private _repositories = new Map<string, RepositoryState>();
-    private _watchers = new Map<string, vscode.FileSystemWatcher>();
+    private _watchers = new Map<string, vscode.FileSystemWatcher[]>();
     private _disposables: Disposable[] = [];
+    private _refreshTimers = new Map<string, NodeJS.Timeout>();
     private _gitService = new GitService();
 
     // Events
@@ -50,35 +51,61 @@ export class RepositoryManager implements Disposable {
         const foundPaths = new Set<string>();
 
         for (const folder of folders) {
-            // 1. Check if the folder root itself is a git repo (most common case)
-            const rootGit = vscode.Uri.joinPath(folder.uri, '.git');
-            try {
-                await vscode.workspace.fs.stat(rootGit);
-                foundPaths.add(folder.uri.fsPath);
-            } catch (e) {
-                // Not a repo at root
-            }
-
-            // 2. Search for nested repositories (e.g. in a monorepo)
-            // Note: findFiles often ignores .git due to default IDE excludes.
-            // We use a manual directory walk or a broader search if needed.
-            try {
-                const entries = await vscode.workspace.fs.readDirectory(folder.uri);
-                for (const [name, type] of entries) {
-                    if (type === vscode.FileType.Directory && name !== '.git' && name !== 'node_modules') {
-                        const subFolderGit = vscode.Uri.joinPath(folder.uri, name, '.git');
-                        try {
-                            await vscode.workspace.fs.stat(subFolderGit);
-                            foundPaths.add(vscode.Uri.joinPath(folder.uri, name).fsPath);
-                        } catch (e) {}
-                    }
-                }
-            } catch (e) {
-                console.error('Error scanning for nested repos', e);
+            const repoPaths = await this.collectGitReposInFolder(folder.uri);
+            for (const repoPath of repoPaths) {
+                foundPaths.add(repoPath);
             }
         }
 
         this.syncRepositories(Array.from(foundPaths));
+    }
+
+    private async collectGitReposInFolder(root: vscode.Uri): Promise<string[]> {
+        const repos: string[] = [];
+        const toVisit: vscode.Uri[] = [root];
+        const ignoredDirs = new Set([
+            '.git',
+            'node_modules',
+            '.next',
+            '.nuxt',
+            'dist',
+            'build',
+            'out',
+            '.turbo'
+        ]);
+
+        while (toVisit.length > 0) {
+            const current = toVisit.pop()!;
+
+            const gitPath = vscode.Uri.joinPath(current, '.git');
+            try {
+                await vscode.workspace.fs.stat(gitPath);
+                repos.push(current.fsPath);
+                // Repository root found: keep scanning nested dirs as well to support
+                // structures with multiple repos inside the same tree.
+            } catch (e) {
+                // Not a repository root, continue traversal.
+            }
+
+            let entries: [string, vscode.FileType][];
+            try {
+                entries = await vscode.workspace.fs.readDirectory(current);
+            } catch (e) {
+                continue;
+            }
+
+            for (const [name, type] of entries) {
+                if (type !== vscode.FileType.Directory) {
+                    continue;
+                }
+                if (ignoredDirs.has(name)) {
+                    continue;
+                }
+                toVisit.push(vscode.Uri.joinPath(current, name));
+            }
+        }
+
+        return repos;
     }
 
     private async syncRepositories(paths: string[]) {
@@ -104,23 +131,35 @@ export class RepositoryManager implements Disposable {
         const state = await this.fetchRepositoryState(path);
         this._repositories.set(path, state);
 
-        // Setup watcher for this repo (.git/HEAD and .git/index)
-        const watcher = vscode.workspace.createFileSystemWatcher(
+        // Watch git internals (branch switches, staging, etc.)
+        const gitWatcher = vscode.workspace.createFileSystemWatcher(
             new vscode.RelativePattern(path, '.git/{HEAD,index,refs/heads/**}')
         );
+        gitWatcher.onDidChange(() => this.scheduleRepoRefresh(path));
+        gitWatcher.onDidCreate(() => this.scheduleRepoRefresh(path));
+        gitWatcher.onDidDelete(() => this.scheduleRepoRefresh(path));
 
-        watcher.onDidChange(() => this.onRepoFileChanged(path));
-        watcher.onDidCreate(() => this.onRepoFileChanged(path));
-        watcher.onDidDelete(() => this.onRepoFileChanged(path));
+        // Watch working tree files so unsaved/staged/unstaged file-list updates are reflected.
+        const worktreeWatcher = vscode.workspace.createFileSystemWatcher(
+            new vscode.RelativePattern(path, '**/*')
+        );
+        worktreeWatcher.onDidChange((uri) => this.onWorktreeFileChanged(path, uri));
+        worktreeWatcher.onDidCreate((uri) => this.onWorktreeFileChanged(path, uri));
+        worktreeWatcher.onDidDelete((uri) => this.onWorktreeFileChanged(path, uri));
 
-        this._watchers.set(path, watcher);
-        this._disposables.push(watcher);
+        this._watchers.set(path, [gitWatcher, worktreeWatcher]);
+        this._disposables.push(gitWatcher, worktreeWatcher);
     }
 
     private removeRepository(path: string) {
-        const watcher = this._watchers.get(path);
-        watcher?.dispose();
+        const watchers = this._watchers.get(path);
+        watchers?.forEach(w => w.dispose());
         this._watchers.delete(path);
+        const timer = this._refreshTimers.get(path);
+        if (timer) {
+            clearTimeout(timer);
+            this._refreshTimers.delete(path);
+        }
         this._repositories.delete(path);
     }
 
@@ -138,6 +177,26 @@ export class RepositoryManager implements Disposable {
             this._repositories.set(path, newState);
             this._onDidChangeRepoState.fire(newState);
         }
+    }
+
+    private onWorktreeFileChanged(repoPath: string, uri: vscode.Uri) {
+        // Ignore internal git folder changes here (already covered by gitWatcher)
+        if (uri.fsPath.includes(`${repoPath}/.git/`) || uri.fsPath.endsWith('/.git')) {
+            return;
+        }
+        this.scheduleRepoRefresh(repoPath);
+    }
+
+    private scheduleRepoRefresh(path: string) {
+        const existing = this._refreshTimers.get(path);
+        if (existing) {
+            clearTimeout(existing);
+        }
+        const timer = setTimeout(() => {
+            this._refreshTimers.delete(path);
+            void this.onRepoFileChanged(path);
+        }, 250);
+        this._refreshTimers.set(path, timer);
     }
     private async fetchRepositoryState(path: string): Promise<RepositoryState> {
         try {
@@ -163,7 +222,23 @@ export class RepositoryManager implements Disposable {
 
     private hasStateChanged(oldState: RepositoryState | undefined, newState: RepositoryState): boolean {
         if (!oldState) return true;
-        return oldState.branch !== newState.branch || oldState.isDirty !== newState.isDirty;
+        if (oldState.branch !== newState.branch || oldState.isDirty !== newState.isDirty) {
+            return true;
+        }
+
+        if (oldState.localChanges.length !== newState.localChanges.length) {
+            return true;
+        }
+
+        const oldChanges = [...oldState.localChanges].sort();
+        const newChanges = [...newState.localChanges].sort();
+        for (let i = 0; i < oldChanges.length; i++) {
+            if (oldChanges[i] !== newChanges[i]) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private updateRepos(states: RepositoryState[]) {
@@ -176,7 +251,9 @@ export class RepositoryManager implements Disposable {
 
     public dispose() {
         this._disposables.forEach(d => d.dispose());
-        this._watchers.forEach(w => w.dispose());
+        this._watchers.forEach(watchers => watchers.forEach(w => w.dispose()));
+        this._refreshTimers.forEach(timer => clearTimeout(timer));
+        this._refreshTimers.clear();
         this._onDidUpdateRepos.dispose();
         this._onDidChangeRepoState.dispose();
     }

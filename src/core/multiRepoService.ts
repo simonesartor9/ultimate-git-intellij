@@ -408,7 +408,28 @@ export class MultiRepoService {
 
         let stashed = false;
         if (shouldStash) {
-            stashed = await this.gitService.stashPush(repo.rootPath, `Auto stash before checkout to ${branchName}`);
+            if (status.hasConflicts) {
+                const choice = await vscode.window.showErrorMessage(
+                    `Cannot stash changes in '${repoName}' because there are merge conflicts.`,
+                    { modal: true, detail: 'Resolve conflicts first or discard all local changes before checkout.' },
+                    'Force Checkout (Discard Changes)'
+                );
+
+                if (choice === 'Force Checkout (Discard Changes)') {
+                    await this.gitService.discardAllChanges(repo.rootPath);
+                    await this.gitService.checkout(repo.rootPath, branchName);
+                    return;
+                }
+
+                throw new Error('Checkout cancelled due to unresolved conflicts.');
+            }
+
+            try {
+                stashed = await this.gitService.stashPush(repo.rootPath, `Auto stash before checkout to ${branchName}`);
+            } catch (e: any) {
+                const details = (e?.stderr || e?.stdout || e?.message || 'Unknown git error').toString().trim();
+                throw new Error(`Could not stash local changes before checkout. ${details}`);
+            }
         }
 
         try {
@@ -447,6 +468,26 @@ export class MultiRepoService {
                     }
                 } else if (choice === 'Discard Stash Changes') {
                      await this.gitService.discardAllChanges(repo.rootPath);
+                } else if (choice === 'Resolve Manually') {
+                    // Guide the user to the native conflict resolution workflow.
+                    await vscode.commands.executeCommand('workbench.view.scm');
+                    const conflicts = await this.gitService.getUnmergedFiles(repo.rootPath);
+                    if (conflicts.length > 0) {
+                        const repoUri = vscode.Uri.file(repo.rootPath);
+                        for (const relativePath of conflicts) {
+                            const fullPath = vscode.Uri.joinPath(repoUri, relativePath);
+                            try {
+                                const doc = await vscode.workspace.openTextDocument(fullPath);
+                                await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: true });
+                            } catch (openError) {
+                                console.error(`Failed to open conflicted file '${relativePath}' in ${repoName}`, openError);
+                            }
+                        }
+                    }
+                    vscode.window.showWarningMessage(
+                        `Resolve conflicts in '${repoName}', then stage files and complete the operation manually.`,
+                        { modal: false }
+                    );
                 }
             }
         }

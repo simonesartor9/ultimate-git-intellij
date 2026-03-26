@@ -45,12 +45,6 @@
           "icon": "$(source-control)"
         },
         {
-          "id": "git-intellij.history",
-          "name": "Local History",
-          "type": "tree",
-          "icon": "$(history)"
-        },
-        {
           "id": "git-intellij.unifiedBranches",
           "name": "Unified Branches",
           "type": "tree",

@@ -5,6 +5,9 @@ import { GitStatus, GitCommit, GitBranch, GitError, GitOptions } from './types';
  * High-level service to interact with the Git CLI.
  */
 export class GitService {
+    private async sleep(ms: number): Promise<void> {
+        await new Promise(resolve => setTimeout(resolve, ms));
+    }
     
     /**
      * Executes a git command and returns the output.
@@ -292,8 +295,33 @@ export class GitService {
         if (message) {
             args.push('-m', message);
         }
-        const output = await this.exec(args, { cwd });
-        return output.includes('Saved working directory');
+        const maxAttempts = 3;
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                const output = await this.exec(args, { cwd });
+                return output.includes('Saved working directory') || output.includes('Saved working tree');
+            } catch (error: any) {
+                const stderr = (error?.stderr ?? '').toString();
+                const stdout = (error?.stdout ?? '').toString();
+                const combinedOutput = `${stderr}\n${stdout}`.toLowerCase();
+                const isLockError = combinedOutput.includes('index.lock') || combinedOutput.includes('unable to create') || combinedOutput.includes('another git process');
+                const isNoChanges = combinedOutput.includes('no local changes to save');
+
+                if (isNoChanges) {
+                    return false;
+                }
+
+                if (isLockError && attempt < maxAttempts) {
+                    await this.sleep(250 * attempt);
+                    continue;
+                }
+
+                throw error;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -316,6 +344,17 @@ export class GitService {
     public async hasLocalChanges(cwd: string): Promise<boolean> {
         const output = await this.exec(['status', '--porcelain'], { cwd });
         return output.trim().length > 0;
+    }
+
+    /**
+     * Lists files currently in an unmerged/conflict state.
+     */
+    public async getUnmergedFiles(cwd: string): Promise<string[]> {
+        const output = await this.exec(['diff', '--name-only', '--diff-filter=U'], { cwd });
+        return output
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => !!line);
     }
 
     /**
