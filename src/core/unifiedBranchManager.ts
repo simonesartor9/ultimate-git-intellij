@@ -125,11 +125,18 @@ export class UnifiedBranchManager {
             totalBehind: data.behind,
             isStarred: this._starredBranches.has(data.name)
         })).sort((a, b) => {
-            // Priority 1: Starred branches
+            // Priority 1: Current branches (Active) - User Request: "metti per primo il branch in cui mi trovo"
+            const aCurrent = a.isCurrentIn.length > 0;
+            const bCurrent = b.isCurrentIn.length > 0;
+            if (aCurrent !== bCurrent) return aCurrent ? -1 : 1;
+
+            // Priority 2: Starred branches (Favorites)
             if (a.isStarred !== b.isStarred) return a.isStarred ? -1 : 1;
-            // Priority 2: Remote/Local grouping
+
+            // Priority 3: Remote/Local grouping
             if (a.isRemote !== b.isRemote) return a.isRemote ? 1 : -1;
-            // Priority 3: Name
+
+            // Priority 4: Name
             return a.name.localeCompare(b.name);
         });
 

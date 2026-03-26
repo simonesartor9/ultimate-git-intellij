@@ -176,8 +176,11 @@ export class GitService {
     /**
      * Pulls from remote.
      */
-    public async pull(cwd: string): Promise<void> {
-        await this.exec(['pull'], { cwd });
+    public async pull(cwd: string, remote?: string, branch?: string): Promise<void> {
+        const args = ['pull'];
+        if (remote) args.push(remote);
+        if (branch) args.push(branch);
+        await this.exec(args, { cwd });
     }
 
     /**
@@ -282,14 +285,15 @@ export class GitService {
     }
 
     /**
-     * Stashes local changes.
+     * Stashes local changes. Returns true if a stash was created.
      */
-    public async stashPush(cwd: string, message?: string): Promise<void> {
+    public async stashPush(cwd: string, message?: string): Promise<boolean> {
         const args = ['stash', 'push', '-u'];
         if (message) {
             args.push('-m', message);
         }
-        await this.exec(args, { cwd });
+        const output = await this.exec(args, { cwd });
+        return output.includes('Saved working directory');
     }
 
     /**
@@ -340,5 +344,13 @@ export class GitService {
         } catch (e) {
             // Ignore if clean fails
         }
+    }
+
+    /**
+     * Updates a local branch from a remote without checking it out.
+     * effective command: git fetch <remote> <remoteBranch>:<localBranch>
+     */
+    public async fetchLocalBranch(cwd: string, remote: string, remoteBranch: string, localBranch: string): Promise<void> {
+        await this.exec(['fetch', remote, `${remoteBranch}:${localBranch}`], { cwd });
     }
 }

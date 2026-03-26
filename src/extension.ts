@@ -140,7 +140,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     const unifiedPullCmd = vscode.commands.registerCommand('git-intellij.unified.pull', (item: UnifiedBranchItem) => {
         if (item?.branch) {
-            multiRepoService.performPull(item.branch.repositories);
+            multiRepoService.performPull(item.branch.repositories, item.branch.name);
         }
     });
 
