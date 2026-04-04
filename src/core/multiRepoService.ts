@@ -53,10 +53,15 @@ export class MultiRepoService {
             return;
         }
 
+        const dirtyResolution = await this.resolveDirtyCheckoutPolicyForBatch(validRepos);
+        if (!dirtyResolution.proceed) {
+            return;
+        }
+
         await this.executeBatchOperation(validRepos, `Checking out '${selectedBranch}'...`, async (repo) => {
             // We already validated the repo has the branch, just checkout.
             // We pass the simple name. gitService.checkout handles the rest (including tracking).
-            await this.smartCheckout(repo, selectedBranch);
+            await this.smartCheckout(repo, selectedBranch, dirtyResolution.policy);
         }, true); // Parallel execution
     }
 
@@ -91,8 +96,13 @@ export class MultiRepoService {
             return;
         }
 
+        const dirtyResolution = await this.resolveDirtyCheckoutPolicyForBatch(validRepos);
+        if (!dirtyResolution.proceed) {
+            return;
+        }
+
         await this.executeBatchOperation(validRepos, `Checking out '${selectedBranch}'...`, async (repo) => {
-             await this.smartCheckout(repo, selectedBranch);
+             await this.smartCheckout(repo, selectedBranch, dirtyResolution.policy);
         }, true);
     }
 
@@ -371,35 +381,91 @@ export class MultiRepoService {
     }
 
     public async performCheckout(repos: any[], branchName: string) {
-        await this.executeBatchOperation(repos, `Checking out '${branchName}'...`, repo => this.smartCheckout(repo, branchName));
+        const dirtyResolution = await this.resolveDirtyCheckoutPolicyForBatch(repos);
+        if (!dirtyResolution.proceed) {
+            return;
+        }
+        await this.executeBatchOperation(repos, `Checking out '${branchName}'...`, repo =>
+            this.smartCheckout(repo, branchName, dirtyResolution.policy)
+        );
+    }
+
+    /**
+     * When checking out multiple repositories, ask once how to handle local changes and reuse the choice.
+     */
+    private async resolveDirtyCheckoutPolicyForBatch(repos: any[]): Promise<
+        { proceed: true; policy?: 'stash' | 'force' } | { proceed: false }
+    > {
+        const dirtyNames: string[] = [];
+        for (const repo of repos) {
+            if (await this.gitService.hasLocalChanges(repo.rootPath)) {
+                dirtyNames.push(repo.rootPath.split(/[\\/]/).pop() || 'Unknown');
+            }
+        }
+        if (dirtyNames.length === 0) {
+            return { proceed: true };
+        }
+
+        const choice = await vscode.window.showWarningMessage(
+            dirtyNames.length === 1
+                ? `Repository '${dirtyNames[0]}' has local changes.`
+                : `${dirtyNames.length} repositories have local changes.`,
+            {
+                modal: true,
+                detail:
+                    'The same choice applies to every repository that has local changes.\n\n' +
+                    dirtyNames.join('\n')
+            },
+            'Smart Checkout (Stash & Apply)',
+            'Force Checkout (Discard Changes)'
+        );
+
+        if (!choice) {
+            return { proceed: false };
+        }
+
+        return {
+            proceed: true,
+            policy: choice === 'Force Checkout (Discard Changes)' ? 'force' : 'stash'
+        };
     }
 
     /**
      * Helper to perform a smart checkout with automatic stashing and conflict handling.
+     * @param batchDirtyPolicy When set (multi-repo checkout), skips the per-repo dirty dialog and uses this policy.
      */
-    public async smartCheckout(repo: any, branchName: string) {
+    public async smartCheckout(repo: any, branchName: string, batchDirtyPolicy?: 'stash' | 'force') {
         const repoName = repo.rootPath.split(/[\\/]/).pop() || 'Unknown';
         const hasChanges = await this.gitService.hasLocalChanges(repo.rootPath);
         
         let shouldStash = false;
 
         if (hasChanges) {
-             const choice = await vscode.window.showWarningMessage(
-                `Repository '${repoName}' has local changes.`,
-                { modal: true, detail: 'How would you like to proceed with the checkout?' },
-                'Smart Checkout (Stash & Apply)',
-                'Force Checkout (Discard Changes)'
-             );
+            if (batchDirtyPolicy === 'force') {
+                await this.gitService.discardAllChanges(repo.rootPath);
+                await this.gitService.checkout(repo.rootPath, branchName);
+                return;
+            }
+            if (batchDirtyPolicy === 'stash') {
+                shouldStash = true;
+            } else {
+                const choice = await vscode.window.showWarningMessage(
+                    `Repository '${repoName}' has local changes.`,
+                    { modal: true, detail: 'How would you like to proceed with the checkout?' },
+                    'Smart Checkout (Stash & Apply)',
+                    'Force Checkout (Discard Changes)'
+                );
 
-             if (!choice) throw new Error('Checkout cancelled');
+                if (!choice) throw new Error('Checkout cancelled');
 
-             if (choice === 'Force Checkout (Discard Changes)') {
-                 await this.gitService.discardAllChanges(repo.rootPath);
-                 await this.gitService.checkout(repo.rootPath, branchName);
-                 return;
-             }
-             
-             shouldStash = true;
+                if (choice === 'Force Checkout (Discard Changes)') {
+                    await this.gitService.discardAllChanges(repo.rootPath);
+                    await this.gitService.checkout(repo.rootPath, branchName);
+                    return;
+                }
+
+                shouldStash = true;
+            }
         }
         
         // We still need the current branch name in case we need to abort

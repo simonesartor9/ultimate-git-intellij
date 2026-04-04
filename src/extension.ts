@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
 import { RepositoryManager } from './core/repoManager';
-import { RepoTreeViewProvider } from './providers/repoTreeView';
 import { GitService } from './core/git/gitService';
 import { MultiRepoService } from './core/multiRepoService';
 import { GitContentProvider } from './core/gitContentProvider';
 import { UnifiedBranchManager } from './core/unifiedBranchManager';
 import { UnifiedBranchesViewProvider, UnifiedBranchItem } from './views/unifiedBranchesView';
 import { HistoryViewProvider } from './views/historyWebview';
+import { RepositoriesWebviewProvider } from './views/repositoriesWebview';
 import { AutoFetchService } from './core/autoFetchService';
 
 /**
@@ -21,19 +21,27 @@ export function activate(context: vscode.ExtensionContext) {
     const autoFetchService = new AutoFetchService(repoManager, gitService);
     
     // 2. Initialize UI Providers
-    const repoTreeViewProvider = new RepoTreeViewProvider(repoManager);
+    const repositoriesProvider = new RepositoriesWebviewProvider(
+        context.extensionUri,
+        repoManager,
+        gitService,
+        context.workspaceState
+    );
     const unifiedBranchesProvider = new UnifiedBranchesViewProvider(unifiedBranchManager);
     const historyViewProvider = new HistoryViewProvider(context.extensionUri, gitService);
-    
-    // 3. Register TreeViews and WebviewView
-    vscode.window.registerTreeDataProvider('git-intellij.repositories', repoTreeViewProvider);
+
+    // 3. Register TreeViews and WebviewViews
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(RepositoriesWebviewProvider.viewId, repositoriesProvider),
+        vscode.window.registerWebviewViewProvider(HistoryViewProvider.viewId, historyViewProvider)
+    );
     vscode.window.registerTreeDataProvider('git-intellij.unifiedBranches', unifiedBranchesProvider);
-    vscode.window.registerWebviewViewProvider(HistoryViewProvider.viewId, historyViewProvider);
 
     // 4. Register Commands
     const refreshCmd = vscode.commands.registerCommand('git-intellij.refresh', () => {
         repoManager.scanWorkspace();
         unifiedBranchManager.refresh();
+        repositoriesProvider.refresh();
     });
 
     // Single Repo Commands

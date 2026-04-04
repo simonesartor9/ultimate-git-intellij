@@ -1,5 +1,5 @@
 import * as cp from 'child_process';
-import { GitStatus, GitCommit, GitBranch, GitError, GitOptions } from './types';
+import { GitStatus, GitCommit, GitBranch, GitError, GitOptions, WorkingTreeFile, WorkingTreeDisplayKind } from './types';
 
 /**
  * High-level service to interact with the Git CLI.
@@ -42,49 +42,163 @@ export class GitService {
     }
 
     /**
+     * Parses one porcelain v1 line (not ##, not !!).
+     * @see https://git-scm.com/docs/git-status#_short_format
+     */
+    private parsePorcelainLine(line: string): WorkingTreeFile | null {
+        if (line.length < 3) {
+            return null;
+        }
+        const xy = line.substring(0, 2);
+        const rest = line.substring(3);
+
+        if (xy === '!!') {
+            return null;
+        }
+
+        if (xy === '??') {
+            return {
+                path: rest,
+                displayKind: 'untracked',
+                staged: false,
+                hasUnstaged: true
+            };
+        }
+
+        const x = xy[0];
+        const y = xy[1];
+
+        let path = rest.trim();
+        if (path.includes(' -> ')) {
+            const parts = path.split(' -> ');
+            path = parts[parts.length - 1].trim();
+        }
+
+        const staged = x !== ' ' && x !== '?';
+        const hasUnstaged = y !== ' ' && y !== '?';
+
+        if (x === 'U' || y === 'U') {
+            return { path, displayKind: 'conflict', staged, hasUnstaged };
+        }
+
+        if (x === 'R' || y === 'R' || x === 'C' || y === 'C') {
+            return { path, displayKind: 'renamed', staged, hasUnstaged };
+        }
+
+        if (y === 'D' && x === ' ') {
+            return { path, displayKind: 'deleted', staged: false, hasUnstaged: true };
+        }
+
+        if (x === 'D') {
+            return {
+                path,
+                displayKind: 'deleted',
+                staged: true,
+                hasUnstaged: y !== ' ' && y !== 'D'
+            };
+        }
+
+        if (x === 'A') {
+            return { path, displayKind: 'added', staged, hasUnstaged };
+        }
+
+        return { path, displayKind: 'modified' as WorkingTreeDisplayKind, staged, hasUnstaged };
+    }
+
+    /**
      * Gets the status of the repository.
      */
     public async getStatus(cwd: string): Promise<GitStatus> {
         const output = await this.exec(['status', '--porcelain', '-b'], { cwd });
         const lines = output.split('\n');
-        
+
         const status: GitStatus = {
             branch: '',
             detached: false,
-            modified: [],
-            untracked: [],
-            staged: [],
+            files: [],
             hasConflicts: false
         };
 
-        // Parse branch info (first line with ##)
+        let startIdx = 0;
         const branchLine = lines[0];
-        if (branchLine && branchLine.startsWith('##')) {
+        if (branchLine?.startsWith('##')) {
             const branchInfo = branchLine.substring(3).trim();
             if (branchInfo.includes('HEAD (no branch)') || branchInfo.includes('detached at')) {
                 status.detached = true;
                 status.branch = branchInfo;
             } else {
                 status.branch = branchInfo.split('...')[0];
-                if (status.branch.includes('initial commit')) status.branch = 'master';
+                if (status.branch.includes('initial commit')) {
+                    status.branch = 'master';
+                }
+            }
+            startIdx = 1;
+        }
+
+        const seen = new Set<string>();
+        for (let i = startIdx; i < lines.length; i++) {
+            const line = lines[i];
+            if (!line || line.startsWith('##')) {
+                continue;
+            }
+            const file = this.parsePorcelainLine(line);
+            if (!file) {
+                continue;
+            }
+            if (seen.has(file.path)) {
+                continue;
+            }
+            seen.add(file.path);
+            status.files.push(file);
+            if (file.displayKind === 'conflict') {
+                status.hasConflicts = true;
             }
         }
 
-        // Parse file statuses
-        for (let i = 1; i < lines.length; i++) {
-            const line = lines[i];
-            if (!line) continue;
-
-            const code = line.substring(0, 2);
-            const file = line.substring(3);
-
-            if (code === '??') status.untracked.push(file);
-            else if (code === ' M' || code === 'M ') status.modified.push(file);
-            else if (code === 'A ' || code === 'M ') status.staged.push(file); // Simplification
-            else if (code === 'UU') status.hasConflicts = true;
-        }
-
         return status;
+    }
+
+    /**
+     * Stages paths (add to index).
+     */
+    public async stagePaths(cwd: string, paths: string[]): Promise<void> {
+        if (paths.length === 0) {
+            return;
+        }
+        await this.exec(['add', '--', ...paths], { cwd });
+    }
+
+    /**
+     * Unstages paths (remove from index, keep working tree).
+     */
+    public async unstagePaths(cwd: string, paths: string[]): Promise<void> {
+        if (paths.length === 0) {
+            return;
+        }
+        try {
+            await this.exec(['restore', '--staged', '--', ...paths], { cwd });
+        } catch {
+            await this.exec(['reset', 'HEAD', '--', ...paths], { cwd });
+        }
+    }
+
+    /**
+     * Creates a commit with the given message (index must already match intent).
+     */
+    public async commit(cwd: string, message: string): Promise<void> {
+        const trimmed = message.trim();
+        if (!trimmed) {
+            throw new Error('Commit message is empty');
+        }
+        await this.exec(['commit', '-m', trimmed], { cwd });
+    }
+
+    /**
+     * Returns true if there is anything staged to commit.
+     */
+    public async hasStagedChanges(cwd: string): Promise<boolean> {
+        const names = await this.exec(['diff', '--cached', '--name-only'], { cwd });
+        return names.trim().length > 0;
     }
 
     /**

@@ -41,7 +41,7 @@
         {
           "id": "git-intellij.repositories",
           "name": "Repositories",
-          "type": "tree",
+          "type": "webview",
           "icon": "$(source-control)"
         },
         {
@@ -287,16 +287,6 @@
       ],
       "view/item/context": [
         {
-          "command": "git-intellij.openInTerminal",
-          "when": "view == git-intellij.repositories && viewItem == repository",
-          "group": "inline"
-        },
-        {
-          "command": "git-intellij.copyPath",
-          "when": "view == git-intellij.repositories && viewItem == repository",
-          "group": "1_modification"
-        },
-        {
           "command": "git-intellij.unified.toggleStar",
           "when": "view == git-intellij.unifiedBranches && viewItem == unifiedBranch",
           "group": "inline@1"
@@ -345,21 +335,6 @@
           "command": "git-intellij.unified.deleteBranch",
           "when": "view == git-intellij.unifiedBranches && viewItem == unifiedBranch",
           "group": "3_git"
-        },
-        {
-            "command": "git-intellij.repo.discardAll",
-            "when": "view == git-intellij.repositories && viewItem == repository",
-            "group": "1_modification"
-        },
-        {
-            "command": "git-intellij.repo.discardFile",
-            "when": "view == git-intellij.repositories && viewItem == fileChange",
-            "group": "inline"
-        },
-        {
-            "command": "git-intellij.repo.discardFile",
-            "when": "view == git-intellij.repositories && viewItem == fileChange",
-            "group": "1_modification"
         }
       ]
     }

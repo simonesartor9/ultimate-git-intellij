@@ -1,14 +1,23 @@
 <svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Lightning Bolt -->
-  <path d="M50 20L84 0L74 48H108L44 128L54 70H20L50 20Z" fill="#F05032" stroke="white" stroke-width="4" stroke-linejoin="round"/>
+  <!-- Git Diamond -->
+  <rect x="19" y="19" width="90" height="90" rx="16" transform="rotate(45 64 64)" fill="#F05032" />
   
-  <!-- Git Nodes Overlay -->
-  <!-- Bottom Node -->
-  <circle cx="58" cy="100" r="10" fill="white" stroke="#F05032" stroke-width="4"/>
-  
-  <!-- Top Node (start of bolt) -->
-  <circle cx="64" cy="24" r="10" fill="white" stroke="#F05032" stroke-width="4"/>
-  
-  <!-- Side Node (on the jagged part) -->
-  <circle cx="96" cy="60" r="10" fill="white" stroke="#F05032" stroke-width="4"/>
+  <g>
+    <!-- Main branch line -->
+    <path d="M 48 32 L 48 96" stroke="white" stroke-width="12" stroke-linecap="round"/>
+    
+    <!-- Side branch line curving to the right -->
+    <path d="M 48 76 C 48 56, 80 70, 80 48" stroke="white" stroke-width="12" stroke-linecap="round" fill="none"/>
+    
+    <!-- Nodes -->
+    <circle cx="48" cy="96" r="11" fill="#F05032" stroke="white" stroke-width="8" />
+    <circle cx="48" cy="32" r="11" fill="#F05032" stroke="white" stroke-width="8" />
+    <circle cx="80" cy="48" r="11" fill="#F05032" stroke="white" stroke-width="8" />
+  </g>
+
+  <!-- Small Lightning Bolt -->
+  <g transform="translate(34, 28) scale(0.85)">
+    <path d="M 94 24 L 66 70 L 80 70 L 74 106 L 102 60 L 88 60 Z" 
+          fill="#FACC15" stroke="white" stroke-width="10" stroke-linejoin="round"/>
+  </g>
 </svg>

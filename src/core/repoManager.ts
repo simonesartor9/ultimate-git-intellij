@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
 import { Disposable, EventEmitter, Event } from 'vscode';
 import { GitService } from './git/gitService';
-import { GitStatus } from './git/types';
+import { WorkingTreeFile } from './git/types';
 
 export interface RepositoryState {
     rootPath: string;
     branch: string;
     isDirty: boolean;
-    localChanges: string[]; // List of file paths
+    files: WorkingTreeFile[];
     lastUpdate: number;
 }
 /**
@@ -201,12 +201,11 @@ export class RepositoryManager implements Disposable {
     private async fetchRepositoryState(path: string): Promise<RepositoryState> {
         try {
             const status = await this._gitService.getStatus(path);
-            const allChanges = [...status.modified, ...status.untracked, ...status.staged];
             return {
                 rootPath: path,
                 branch: status.branch,
-                isDirty: allChanges.length > 0,
-                localChanges: allChanges,
+                isDirty: status.files.length > 0,
+                files: status.files,
                 lastUpdate: Date.now()
             };
         } catch (e) {
@@ -214,7 +213,7 @@ export class RepositoryManager implements Disposable {
                 rootPath: path,
                 branch: 'unknown',
                 isDirty: false,
-                localChanges: [],
+                files: [],
                 lastUpdate: Date.now()
             };
         }
@@ -226,14 +225,16 @@ export class RepositoryManager implements Disposable {
             return true;
         }
 
-        if (oldState.localChanges.length !== newState.localChanges.length) {
+        if (oldState.files.length !== newState.files.length) {
             return true;
         }
 
-        const oldChanges = [...oldState.localChanges].sort();
-        const newChanges = [...newState.localChanges].sort();
-        for (let i = 0; i < oldChanges.length; i++) {
-            if (oldChanges[i] !== newChanges[i]) {
+        const key = (f: WorkingTreeFile) =>
+            `${f.path}|${f.displayKind}|${f.staged ? '1' : '0'}|${f.hasUnstaged ? '1' : '0'}`;
+        const oldKeys = [...oldState.files].map(key).sort();
+        const newKeys = [...newState.files].map(key).sort();
+        for (let i = 0; i < oldKeys.length; i++) {
+            if (oldKeys[i] !== newKeys[i]) {
                 return true;
             }
         }

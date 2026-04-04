@@ -1,9 +1,23 @@
+export type WorkingTreeDisplayKind =
+    | 'modified'
+    | 'added'
+    | 'deleted'
+    | 'untracked'
+    | 'renamed'
+    | 'conflict';
+
+export interface WorkingTreeFile {
+    /** Path relative to repository root (as reported by Git). */
+    path: string;
+    displayKind: WorkingTreeDisplayKind;
+    staged: boolean;
+    hasUnstaged: boolean;
+}
+
 export interface GitStatus {
     branch: string;
     detached: boolean;
-    modified: string[];
-    untracked: string[];
-    staged: string[];
+    files: WorkingTreeFile[];
     hasConflicts: boolean;
 }
 
